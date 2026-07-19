@@ -1,180 +1,207 @@
-import { Image } from 'expo-image';
-import { SymbolView } from 'expo-symbols';
-import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+// src/app/explore.tsx
+import { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  FlatList,
+  Alert,
+  ActivityIndicator,
+  StyleSheet,
+} from 'react-native';
 
-import { ExternalLink } from '@/components/external-link';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Collapsible } from '@/components/ui/collapsible';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { supabase } from '@/lib/supabase';
 
-export default function TabTwoScreen() {
-  const safeAreaInsets = useSafeAreaInsets();
-  const insets = {
-    ...safeAreaInsets,
-    bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
-  };
-  const theme = useTheme();
+type Treatment = {
+  id: string;
+  name: string;
+  default_price: number;
+};
 
-  const contentPlatformStyle = Platform.select({
-    android: {
-      paddingTop: insets.top,
-      paddingLeft: insets.left,
-      paddingRight: insets.right,
-      paddingBottom: insets.bottom,
-    },
-    web: {
-      paddingTop: Spacing.six,
-      paddingBottom: Spacing.four,
-    },
-  });
+export default function SettingsScreen() {
+  const [treatments, setTreatments] = useState<Treatment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newName, setNewName] = useState('');
+  const [newPrice, setNewPrice] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    loadTreatments();
+  }, []);
+
+  async function loadTreatments() {
+    setLoading(true);
+    const result = await supabase
+      .from('treatments')
+      .select('id, name, default_price')
+      .eq('is_active', true)
+      .order('name');
+    setTreatments(result.data ?? []);
+    setLoading(false);
+  }
+
+  async function addTreatment() {
+    if (!newName.trim()) {
+      Alert.alert('שגיאה', 'יש להזין שם טיפול');
+      return;
+    }
+    const priceNum = parseFloat(newPrice) || 0;
+    if (priceNum < 0) {
+      Alert.alert('שגיאה', 'מחיר לא יכול להיות שלילי');
+      return;
+    }
+
+    setSaving(true);
+    const userResult = await supabase.auth.getUser();
+    const user = userResult.data.user;
+    if (!user) {
+      setSaving(false);
+      return;
+    }
+
+    const insertResult = await supabase
+      .from('treatments')
+      .insert({
+        user_id: user.id,
+        name: newName.trim(),
+        default_price: priceNum,
+      })
+      .select()
+      .single();
+
+    setSaving(false);
+
+    if (insertResult.error) {
+      Alert.alert('שגיאה בהוספת טיפול', insertResult.error.message);
+      return;
+    }
+
+    setTreatments(function (prev) {
+      return prev.concat([insertResult.data]).sort(function (a, b) {
+        return a.name.localeCompare(b.name);
+      });
+    });
+    setNewName('');
+    setNewPrice('');
+  }
+
+  function confirmDelete(treatment: Treatment) {
+    Alert.alert(
+      'מחיקת טיפול',
+      'למחוק את "' + treatment.name + '"? הטיפול יוסתר, אך היסטוריית תורים קיימת תישמר.',
+      [
+        { text: 'ביטול', style: 'cancel' },
+        { text: 'מחיקה', style: 'destructive', onPress: function () { deleteTreatment(treatment.id); } },
+      ]
+    );
+  }
+
+  async function deleteTreatment(id: string) {
+    const result = await supabase.from('treatments').update({ is_active: false }).eq('id', id);
+    if (result.error) {
+      Alert.alert('שגיאה', result.error.message);
+      return;
+    }
+    setTreatments(function (prev) {
+      return prev.filter(function (t) {
+        return t.id !== id;
+      });
+    });
+  }
 
   return (
-    <ScrollView
-      style={[styles.scrollView, { backgroundColor: theme.background }]}
-      contentInset={insets}
-      contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}>
-      <ThemedView style={styles.container}>
-        <ThemedView style={styles.titleContainer}>
-          <ThemedText type="subtitle">Explore</ThemedText>
-          <ThemedText style={styles.centerText} themeColor="textSecondary">
-            This starter app includes example{'\n'}code to help you get started.
-          </ThemedText>
+    <View style={styles.container}>
+      <Text style={styles.header}>ניהול טיפולים</Text>
 
-          <ExternalLink href="https://docs.expo.dev" asChild>
-            <Pressable style={({ pressed }) => pressed && styles.pressed}>
-              <ThemedView type="backgroundElement" style={styles.linkButton}>
-                <ThemedText type="link">Expo documentation</ThemedText>
-                <SymbolView
-                  tintColor={theme.text}
-                  name={{ ios: 'arrow.up.right.square', android: 'link', web: 'link' }}
-                  size={12}
-                />
-              </ThemedView>
-            </Pressable>
-          </ExternalLink>
-        </ThemedView>
+      {loading ? (
+        <ActivityIndicator color="#8FAF9D" style={{ marginTop: 20 }} />
+      ) : (
+        <FlatList
+          data={treatments}
+          keyExtractor={function (item) {
+            return item.id;
+          }}
+          contentContainerStyle={{ gap: 8, paddingBottom: 16 }}
+          ListEmptyComponent={<Text style={styles.empty}>עדיין אין טיפולים. הוסיפי אחד למטה.</Text>}
+          renderItem={function ({ item }) {
+            return (
+              <View style={styles.row}>
+                <Pressable onPress={function () { confirmDelete(item); }}>
+                  <Text style={styles.delete}>מחיקה</Text>
+                </Pressable>
+                <Text style={styles.rowText}>
+                  {item.name} · ₪{item.default_price}
+                </Text>
+              </View>
+            );
+          }}
+        />
+      )}
 
-        <ThemedView style={styles.sectionsWrapper}>
-          <Collapsible title="File-based routing">
-            <ThemedText type="small">
-              This app has two screens: <ThemedText type="code">src/app/index.tsx</ThemedText> and{' '}
-              <ThemedText type="code">src/app/explore.tsx</ThemedText>
-            </ThemedText>
-            <ThemedText type="small">
-              The layout file in <ThemedText type="code">src/app/_layout.tsx</ThemedText> sets up
-              the tab navigator.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/router/introduction">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Android, iOS, and web support">
-            <ThemedView type="backgroundElement" style={styles.collapsibleContent}>
-              <ThemedText type="small">
-                You can open this project on Android, iOS, and the web. To open the web version,
-                press <ThemedText type="smallBold">w</ThemedText> in the terminal running this
-                project.
-              </ThemedText>
-              <Image
-                source={require('@/assets/images/tutorial-web.png')}
-                style={styles.imageTutorial}
-              />
-            </ThemedView>
-          </Collapsible>
-
-          <Collapsible title="Images">
-            <ThemedText type="small">
-              For static images, you can use the <ThemedText type="code">@2x</ThemedText> and{' '}
-              <ThemedText type="code">@3x</ThemedText> suffixes to provide files for different
-              screen densities.
-            </ThemedText>
-            <Image source={require('@/assets/images/react-logo.png')} style={styles.imageReact} />
-            <ExternalLink href="https://reactnative.dev/docs/images">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Light and dark mode components">
-            <ThemedText type="small">
-              This template has light and dark mode support. The{' '}
-              <ThemedText type="code">useColorScheme()</ThemedText> hook lets you inspect what the
-              user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Animations">
-            <ThemedText type="small">
-              This template includes an example of an animated component. The{' '}
-              <ThemedText type="code">src/components/ui/collapsible.tsx</ThemedText> component uses
-              the powerful <ThemedText type="code">react-native-reanimated</ThemedText> library to
-              animate opening this hint.
-            </ThemedText>
-          </Collapsible>
-        </ThemedView>
-        {Platform.OS === 'web' && <WebBadge />}
-      </ThemedView>
-    </ScrollView>
+      <View style={styles.addBox}>
+        <Text style={styles.subHeader}>הוספת טיפול חדש</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="שם טיפול"
+          value={newName}
+          onChangeText={setNewName}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="מחיר ברירת מחדל"
+          keyboardType="numeric"
+          value={newPrice}
+          onChangeText={setNewPrice}
+        />
+        <Pressable style={styles.addButton} onPress={addTreatment} disabled={saving}>
+          {saving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.addButtonText}>+ הוספת טיפול</Text>
+          )}
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollView: {
-    flex: 1,
-  },
-  contentContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  container: {
-    maxWidth: MaxContentWidth,
-    flexGrow: 1,
-  },
-  titleContainer: {
-    gap: Spacing.three,
+  container: { flex: 1, backgroundColor: '#FAF9F7', padding: 16 },
+  header: { fontSize: 20, fontWeight: '700', color: '#2D2D2D', textAlign: 'right', marginBottom: 12 },
+  subHeader: { fontSize: 15, fontWeight: '600', color: '#2D2D2D', textAlign: 'right', marginBottom: 8 },
+  empty: { textAlign: 'center', color: '#777777', marginTop: 20 },
+  row: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.six,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 12,
   },
-  centerText: {
-    textAlign: 'center',
+  rowText: { color: '#2D2D2D', fontWeight: '600' },
+  delete: { color: '#C0504D' },
+  addBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 14,
+    marginTop: 12,
+    gap: 8,
   },
-  pressed: {
-    opacity: 0.7,
+  input: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 10,
+    padding: 12,
+    textAlign: 'right',
+    backgroundColor: '#FAF9F7',
   },
-  linkButton: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.five,
-    justifyContent: 'center',
-    gap: Spacing.one,
+  addButton: {
+    backgroundColor: '#8FAF9D',
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: 'center',
+    marginTop: 4,
   },
-  sectionsWrapper: {
-    gap: Spacing.five,
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
-  },
-  collapsibleContent: {
-    alignItems: 'center',
-  },
-  imageTutorial: {
-    width: '100%',
-    aspectRatio: 296 / 171,
-    borderRadius: Spacing.three,
-    marginTop: Spacing.two,
-  },
-  imageReact: {
-    width: 100,
-    height: 100,
-    alignSelf: 'center',
-  },
+  addButtonText: { color: '#FFFFFF', fontWeight: '600' },
 });
