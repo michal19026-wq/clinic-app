@@ -13,6 +13,7 @@ import {
 
 import { supabase } from '@/lib/supabase';
 import SetPinModal from '@/components/set-pin-modal';
+import ClinicSettingsModal from '@/components/clinic-settings-modal';
 
 type Treatment = {
   id: string;
@@ -27,6 +28,7 @@ export default function SettingsScreen() {
   const [newPrice, setNewPrice] = useState('');
   const [saving, setSaving] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
+  const [showClinicModal, setShowClinicModal] = useState(false);
 
   useEffect(function () {
     loadTreatments();
@@ -116,7 +118,11 @@ export default function SettingsScreen() {
     <View style={styles.container}>
       <Text style={styles.header}>הגדרות</Text>
 
-      <Pressable style={styles.secondaryButton} onPress={function () { setShowPinModal(true); }}>
+      <Pressable style={styles.secondaryButton} onPress={function () { setShowClinicModal(true); }}>
+        <Text style={styles.secondaryButtonText}>הגדרות קליניקה (שם, ימי עבודה, תשלום, תזכורות)</Text>
+      </Pressable>
+
+      <Pressable style={[styles.secondaryButton, { marginTop: 8 }]} onPress={function () { setShowPinModal(true); }}>
         <Text style={styles.secondaryButtonText}>הגדרת קוד נעילה</Text>
       </Pressable>
 
@@ -172,6 +178,7 @@ export default function SettingsScreen() {
       </View>
 
       <SetPinModal visible={showPinModal} onClose={function () { setShowPinModal(false); }} />
+      <ClinicSettingsModal visible={showClinicModal} onClose={function () { setShowClinicModal(false); }} />
     </View>
   );
 }
