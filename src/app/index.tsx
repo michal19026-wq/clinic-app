@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, FlatList, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { Calendar, DateData } from 'react-native-calendars';
-
+import NewAppointmentModal from '@/components/appointment-form';
 import { supabase } from '@/lib/supabase';
 
 type Appointment = {
@@ -37,7 +37,7 @@ export default function HomeScreen() {
   const [selectedDate, setSelectedDate] = useState(todayString());
   const [monthAppointments, setMonthAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-
+  const [showNewModal, setShowNewModal] = useState(false);
   const loadMonth = useCallback(async (dateInMonth: string) => {
     setLoading(true);
     const [year, month] = dateInMonth.split('-').map(Number);
@@ -147,9 +147,16 @@ export default function HomeScreen() {
         />
       )}
 
-      <Pressable style={styles.fab}>
+<Pressable style={styles.fab} onPress={() => setShowNewModal(true)}>
         <Text style={styles.fabText}>+</Text>
       </Pressable>
+
+      <NewAppointmentModal
+        visible={showNewModal}
+        date={selectedDate}
+        onClose={() => setShowNewModal(false)}
+        onSaved={() => loadMonth(selectedDate)}
+      />
     </View>
   );
 }
