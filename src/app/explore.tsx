@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 
 import { supabase } from '@/lib/supabase';
+import SetPinModal from '@/components/set-pin-modal';
 
 type Treatment = {
   id: string;
@@ -25,8 +26,9 @@ export default function SettingsScreen() {
   const [newName, setNewName] = useState('');
   const [newPrice, setNewPrice] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
 
-  useEffect(() => {
+  useEffect(function () {
     loadTreatments();
   }, []);
 
@@ -112,7 +114,13 @@ export default function SettingsScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>ניהול טיפולים</Text>
+      <Text style={styles.header}>הגדרות</Text>
+
+      <Pressable style={styles.secondaryButton} onPress={function () { setShowPinModal(true); }}>
+        <Text style={styles.secondaryButtonText}>הגדרת קוד נעילה</Text>
+      </Pressable>
+
+      <Text style={[styles.header, { fontSize: 17, marginTop: 20 }]}>ניהול טיפולים</Text>
 
       {loading ? (
         <ActivityIndicator color="#8FAF9D" style={{ marginTop: 20 }} />
@@ -162,6 +170,8 @@ export default function SettingsScreen() {
           )}
         </Pressable>
       </View>
+
+      <SetPinModal visible={showPinModal} onClose={function () { setShowPinModal(false); }} />
     </View>
   );
 }
@@ -204,4 +214,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   addButtonText: { color: '#FFFFFF', fontWeight: '600' },
+  secondaryButton: {
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#8FAF9D',
+    alignItems: 'center',
+  },
+  secondaryButtonText: { color: '#8FAF9D', fontWeight: '600' },
 });
