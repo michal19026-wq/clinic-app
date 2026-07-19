@@ -4,6 +4,7 @@ import { View, Text, FlatList, Pressable, ActivityIndicator, StyleSheet } from '
 import { Calendar, DateData } from 'react-native-calendars';
 import NewAppointmentModal from '@/components/appointment-form';
 import { supabase } from '@/lib/supabase';
+import AppointmentDetailModal from '@/components/appointment-detail-modal';
 
 type Appointment = {
   id: string;
@@ -12,6 +13,7 @@ type Appointment = {
   price: number;
   payment_status: 'unpaid' | 'partial' | 'paid';
   appointment_status: 'planned' | 'completed' | 'cancelled' | 'no_show';
+  notes: string | null;
   clients: { full_name: string } | null;
   treatments: { name: string } | null;
 };
@@ -38,6 +40,8 @@ export default function HomeScreen() {
   const [monthAppointments, setMonthAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNewModal, setShowNewModal] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+
   const loadMonth = useCallback(async (dateInMonth: string) => {
     setLoading(true);
     const [year, month] = dateInMonth.split('-').map(Number);
@@ -48,7 +52,7 @@ export default function HomeScreen() {
     const { data, error } = await supabase
       .from('appointments')
       .select(
-        'id, appointment_date, appointment_time, price, payment_status, appointment_status, clients(full_name), treatments(name)'
+        'id, appointment_date, appointment_time, price, payment_status, appointment_status, notes, clients(full_name), treatments(name)'
       )
       .eq('is_active', true)
       .gte('appointment_date', firstDay)
@@ -130,7 +134,7 @@ export default function HomeScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: 16, gap: 10 }}
           renderItem={({ item }) => (
-            <Pressable style={styles.card}>
+            <Pressable style={styles.card} onPress={function () { setSelectedAppointment(item); }}>
               <View style={styles.cardHeader}>
                 <Text style={styles.cardTime}>{item.appointment_time.slice(0, 5)}</Text>
                 <Text style={styles.cardClient}>{item.clients?.full_name ?? 'ללא לקוחה'}</Text>
@@ -147,7 +151,7 @@ export default function HomeScreen() {
         />
       )}
 
-<Pressable style={styles.fab} onPress={() => setShowNewModal(true)}>
+      <Pressable style={styles.fab} onPress={() => setShowNewModal(true)}>
         <Text style={styles.fabText}>+</Text>
       </Pressable>
 
@@ -156,6 +160,16 @@ export default function HomeScreen() {
         date={selectedDate}
         onClose={() => setShowNewModal(false)}
         onSaved={() => loadMonth(selectedDate)}
+      />
+
+      <AppointmentDetailModal
+        visible={selectedAppointment !== null}
+        appointment={selectedAppointment}
+        onClose={function () { setSelectedAppointment(null); }}
+        onChanged={function () {
+          loadMonth(selectedDate);
+          setSelectedAppointment(null);
+        }}
       />
     </View>
   );
